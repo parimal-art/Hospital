@@ -1,0 +1,5 @@
+import { Alert, Card, Descriptions, Typography } from 'antd';
+import React from 'react';
+import PageHeader from '../../components/PageHeader.jsx';
+
+export default function Settings(){ return <><PageHeader title="Settings" subtitle="Clinic configuration area."/><Card className="page-card"><Alert type="info" showIcon message="Configuration ready" description="Use backend seed data for master ledgers, doctors and beds. Extend this page for invoice format, GST/tax, approval policy, and storage integration."/><Typography.Title level={5} style={{marginTop:20}}>Recommended Settings</Typography.Title><Descriptions bordered column={1}><Descriptions.Item label="Theme">White, deep blue, sky blue, teal and soft green hospital-friendly UI.</Descriptions.Item><Descriptions.Item label="Storage">Local uploads folder now; Cloudinary/S3 adapter can replace upload middleware.</Descriptions.Item><Descriptions.Item label="Security">JWT, bcrypt, role middleware, forgot password token hashing and audit logs.</Descriptions.Item></Descriptions></Card></>; }

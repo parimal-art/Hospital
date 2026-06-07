@@ -1,0 +1,22 @@
+const express = require('express');
+const reports = require('../controllers/reportController');
+const { protect } = require('../middleware/authMiddleware');
+const { authorize } = require('../middleware/roleMiddleware');
+const { ROLES } = require('../utils/roles');
+
+const router = express.Router();
+const reportRoles = [ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.AUDITOR, ROLES.RECEPTION, ROLES.DOCTOR, ROLES.NURSE];
+router.get('/payment-details', protect, authorize(ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.AUDITOR), reports.paymentDetails);
+router.get('/day-book', protect, authorize(ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.AUDITOR), reports.dayBook);
+router.get('/trial-balance', protect, authorize(ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.AUDITOR), reports.trialBalance);
+router.get('/balance-sheet', protect, authorize(ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.AUDITOR), reports.balanceSheet);
+router.get('/patient-commission', protect, authorize(...reportRoles), reports.patientCommission);
+router.get('/admission-discharge', protect, authorize(...reportRoles), reports.admissionDischarge);
+router.get('/doctor-wages', protect, authorize(ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.DOCTOR, ROLES.AUDITOR), reports.doctorWages);
+router.get('/pending-dues', protect, authorize(ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.AUDITOR), reports.pendingDues);
+router.get('/ipd-notes', protect, authorize(...reportRoles), reports.ipdNotes);
+router.get('/employee-verification', protect, authorize(ROLES.ADMIN, ROLES.AUDITOR), reports.employeeVerification);
+router.get('/daily-bed-rent', protect, authorize(...reportRoles), reports.dailyBedRent);
+router.get('/daily-expense', protect, authorize(...reportRoles), reports.dailyExpense);
+router.get('/billing', protect, authorize(...reportRoles), reports.billingReport);
+module.exports = router;
