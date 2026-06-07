@@ -8,6 +8,7 @@ const medicineSaleItemSchema = new mongoose.Schema({
   quantity: { type: Number, required: true, min: 1 },
   rate: { type: Number, default: 0, min: 0 },
   mrp: { type: Number, default: 0, min: 0 },
+  discountPercent: { type: Number, default: 0, min: 0, max: 99 },
   discount: { type: Number, default: 0, min: 0 },
   tax: { type: Number, default: 0, min: 0 },
   total: { type: Number, default: 0 }
@@ -23,6 +24,7 @@ const medicineSaleSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now },
   items: [medicineSaleItemSchema],
   subTotal: { type: Number, default: 0 },
+  discountPercent: { type: Number, default: 0, min: 0, max: 99 },
   discount: { type: Number, default: 0 },
   tax: { type: Number, default: 0 },
   total: { type: Number, default: 0 },

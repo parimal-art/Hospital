@@ -47,7 +47,7 @@ export default function AppLayout() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} breakpoint="lg" collapsedWidth={screens.md ? 80 : 0}>
-        <div className="app-logo"><FiActivity /> {!collapsed && <span>Clinic ERP</span>}</div>
+        <div className="app-logo"><FiActivity /> {!collapsed && <span>TRINETRA</span>}</div>
         <Menu theme="dark" mode="inline" selectedKeys={[selectedKey]} items={items} onClick={({ key }) => navigate(key)} />
       </Sider>
       <Layout>

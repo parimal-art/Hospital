@@ -21,6 +21,49 @@ const normalizeSaleDate = (date) => {
   return d;
 };
 
+const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+
+const readDiscountPercent = (value, label = 'Discount percentage') => {
+  if (value === undefined || value === null || value === '') return 0;
+  const percent = Number(value);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 99 || !Number.isInteger(percent)) {
+    throw new Error(`${label} must be a whole number between 0 and 99.`);
+  }
+  return percent;
+};
+
+const buildPurchaseBill = async ({ req, medicine, quantity, previousStock, movementType, referenceModel, referenceId, note }) => {
+  const stockAddingDate = req.body.stockAddingDate ? new Date(req.body.stockAddingDate) : new Date();
+  const purchaseRate = Number(req.body.purchaseRate !== undefined && req.body.purchaseRate !== '' ? req.body.purchaseRate : (medicine.purchaseRate || 0));
+  const subTotal = roundMoney(Number(quantity || 0) * purchaseRate);
+  const discountPercent = readDiscountPercent(req.body.discountPercent ?? req.body.discount, 'Purchase discount percentage');
+  const discount = roundMoney((subTotal * discountPercent) / 100);
+  const tax = roundMoney(Number(req.body.tax || 0));
+  const total = roundMoney(Math.max(subTotal - discount + tax, 0));
+
+  return {
+    medicine: medicine._id,
+    movementType,
+    quantity,
+    previousStock,
+    newStock: medicine.stockQty,
+    referenceModel,
+    referenceId,
+    billNumber: req.body.purchaseBillNumber || await generateNumber(MedicineStockMovement, 'billNumber', 'MPB'),
+    stockAddingDate,
+    supplier: req.body.supplier || medicine.supplier,
+    purchaseRate,
+    subTotal,
+    discountPercent,
+    discount,
+    tax,
+    total,
+    paymentMode: req.body.paymentMode || 'Cash',
+    note,
+    createdBy: req.user._id
+  };
+};
+
 const getStockPriority = (medicine) => {
   const stock = Number(medicine.stockQty || 0);
   const reorderLevel = Number(medicine.reorderLevel || 10);
@@ -129,29 +172,39 @@ const createMedicine = asyncHandler(async (req, res) => {
     throw new Error('Market name and composition are required.');
   }
 
+  try {
+    readDiscountPercent(req.body.discountPercent ?? req.body.discount, 'Purchase discount percentage');
+  } catch (error) {
+    res.status(400);
+    throw error;
+  }
+
+  const stockAddingDate = req.body.stockAddingDate ? new Date(req.body.stockAddingDate) : new Date();
   const medicine = await Medicine.create({
     ...req.body,
+    stockAddingDate,
+    lastStockAddedAt: Number(req.body.stockQty || 0) > 0 ? stockAddingDate : undefined,
     saleRate: req.body.saleRate !== undefined ? req.body.saleRate : (req.body.mrp || 0),
     createdBy: req.user._id,
     updatedBy: req.user._id
   });
 
+  let purchaseBill = null;
   if (Number(medicine.stockQty || 0) > 0) {
-    await MedicineStockMovement.create({
-      medicine: medicine._id,
-      movementType: 'Opening',
+    purchaseBill = await MedicineStockMovement.create(await buildPurchaseBill({
+      req,
+      medicine,
       quantity: medicine.stockQty,
       previousStock: 0,
-      newStock: medicine.stockQty,
+      movementType: 'Opening',
       referenceModel: 'Medicine',
       referenceId: String(medicine._id),
-      note: 'Opening stock while creating medicine',
-      createdBy: req.user._id
-    });
+      note: req.body.note || 'Opening stock while creating medicine'
+    }));
   }
 
-  await logAudit({ req, action: 'Medicine Created', module: 'Medical Store', recordId: medicine._id, newData: medicine.toObject() });
-  sendSuccess(res, 'Medicine created.', decorateMedicine(medicine), 201);
+  await logAudit({ req, action: 'Medicine Created', module: 'Medical Store', recordId: medicine._id, newData: { medicine: medicine.toObject(), purchaseBill: purchaseBill?.toObject?.() } });
+  sendSuccess(res, 'Medicine created.', { medicine: decorateMedicine(medicine), purchaseBill }, 201);
 });
 
 const updateMedicine = asyncHandler(async (req, res) => {
@@ -175,29 +228,37 @@ const addStock = asyncHandler(async (req, res) => {
   const quantity = Number(req.body.quantity || 0);
   if (quantity <= 0) { res.status(400); throw new Error('Quantity must be greater than 0.'); }
 
+  try {
+    readDiscountPercent(req.body.discountPercent ?? req.body.discount, 'Purchase discount percentage');
+  } catch (error) {
+    res.status(400);
+    throw error;
+  }
+
   const previousStock = Number(medicine.stockQty || 0);
+  const stockAddingDate = req.body.stockAddingDate ? new Date(req.body.stockAddingDate) : new Date();
   medicine.stockQty = previousStock + quantity;
   ['purchaseRate', 'mrp', 'saleRate', 'batchNo', 'expiryDate', 'supplier', 'rackNo', 'reorderLevel'].forEach((field) => {
     if (req.body[field] !== undefined && req.body[field] !== '') medicine[field] = req.body[field];
   });
-  medicine.lastStockAddedAt = new Date();
+  medicine.stockAddingDate = stockAddingDate;
+  medicine.lastStockAddedAt = stockAddingDate;
   medicine.updatedBy = req.user._id;
   await medicine.save();
 
-  await MedicineStockMovement.create({
-    medicine: medicine._id,
-    movementType: 'Add Stock',
+  const purchaseBill = await MedicineStockMovement.create(await buildPurchaseBill({
+    req,
+    medicine,
     quantity,
     previousStock,
-    newStock: medicine.stockQty,
+    movementType: 'Add Stock',
     referenceModel: 'Manual',
     referenceId: String(medicine._id),
-    note: req.body.note || 'Stock added',
-    createdBy: req.user._id
-  });
+    note: req.body.note || 'Stock added'
+  }));
 
-  await logAudit({ req, action: 'Medicine Stock Added', module: 'Medical Store', recordId: medicine._id, newData: { quantity, previousStock, newStock: medicine.stockQty } });
-  sendSuccess(res, 'Stock added.', decorateMedicine(medicine));
+  await logAudit({ req, action: 'Medicine Stock Added', module: 'Medical Store', recordId: medicine._id, newData: { quantity, previousStock, newStock: medicine.stockQty, purchaseBill: purchaseBill.toObject() } });
+  sendSuccess(res, 'Stock added and purchase bill generated.', { medicine: decorateMedicine(medicine), purchaseBill });
 });
 
 const calculateSale = (rawItems, medicinesById, body) => {
@@ -205,10 +266,11 @@ const calculateSale = (rawItems, medicinesById, body) => {
     const medicine = medicinesById[String(raw.medicine)];
     const quantity = Number(raw.quantity || 0);
     const rate = Number(raw.rate !== undefined && raw.rate !== '' ? raw.rate : (medicine.saleRate || medicine.mrp || 0));
-    const discount = Number(raw.discount || 0);
-    const tax = Number(raw.tax || 0);
-    const lineAmount = quantity * rate;
-    const total = Math.max(lineAmount - discount + tax, 0);
+    const discountPercent = readDiscountPercent(raw.discountPercent ?? raw.discount, 'Item discount percentage');
+    const tax = roundMoney(Number(raw.tax || 0));
+    const lineAmount = roundMoney(quantity * rate);
+    const discount = roundMoney((lineAmount * discountPercent) / 100);
+    const total = roundMoney(Math.max(lineAmount - discount + tax, 0));
     return {
       medicine: medicine._id,
       marketName: medicine.marketName,
@@ -217,18 +279,21 @@ const calculateSale = (rawItems, medicinesById, body) => {
       quantity,
       rate,
       mrp: medicine.mrp || 0,
+      discountPercent,
       discount,
       tax,
       total
     };
   });
 
-  const subTotal = items.reduce((sum, item) => sum + item.total, 0);
-  const total = Math.max(subTotal - Number(body.discount || 0) + Number(body.tax || 0), 0);
-  const paidAmount = Number(body.paidAmount || 0);
-  const balanceAmount = Math.max(total - paidAmount, 0);
+  const subTotal = roundMoney(items.reduce((sum, item) => sum + item.total, 0));
+  const discountPercent = readDiscountPercent(body.discountPercent ?? body.discount, 'Bill discount percentage');
+  const discount = roundMoney((subTotal * discountPercent) / 100);
+  const total = roundMoney(Math.max(subTotal - discount + Number(body.tax || 0), 0));
+  const paidAmount = roundMoney(Number(body.paidAmount || 0));
+  const balanceAmount = roundMoney(Math.max(total - paidAmount, 0));
   const status = paidAmount <= 0 ? 'Credit' : balanceAmount === 0 ? 'Paid' : 'Partially Paid';
-  return { items, subTotal, total, paidAmount, balanceAmount, status };
+  return { items, subTotal, discountPercent, discount, total, paidAmount, balanceAmount, status };
 };
 
 const ensureStockAvailable = async (rawItems) => {
@@ -362,6 +427,14 @@ const createSale = asyncHandler(async (req, res) => {
     patient = admissionDoc.patient?._id || admissionDoc.patient;
   }
 
+  try {
+    readDiscountPercent(req.body.discountPercent ?? req.body.discount, 'Bill discount percentage');
+    rawItems.forEach((item) => readDiscountPercent(item.discountPercent ?? item.discount, 'Item discount percentage'));
+  } catch (error) {
+    res.status(400);
+    throw error;
+  }
+
   const { requestedByMedicine, medicinesById } = await ensureStockAvailable(rawItems);
   const calc = calculateSale(rawItems, medicinesById, req.body);
   const sale = await MedicineSale.create({
@@ -373,7 +446,8 @@ const createSale = asyncHandler(async (req, res) => {
     outsiderMobile: req.body.outsiderMobile,
     date: req.body.date || new Date(),
     paymentMode: req.body.paymentMode || 'Cash',
-    discount: Number(req.body.discount || 0),
+    discountPercent: calc.discountPercent,
+    discount: calc.discount,
     tax: Number(req.body.tax || 0),
     notes: req.body.notes,
     preparedBy: req.user._id,
@@ -487,6 +561,49 @@ const cancelSale = asyncHandler(async (req, res) => {
   sendSuccess(res, 'Medicine bill cancelled and stock restored.', sale);
 });
 
+const getStockBills = asyncHandler(async (req, res) => {
+  const { search, from, to } = req.query;
+  const query = {
+    movementType: { $in: ['Opening', 'Add Stock'] },
+    billNumber: { $exists: true, $ne: '' }
+  };
+
+  if (from || to) query.stockAddingDate = { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) };
+  if (search) {
+    const matchingMedicines = await Medicine.find({
+      $or: [
+        { marketName: { $regex: search, $options: 'i' } },
+        { genericName: { $regex: search, $options: 'i' } },
+        { composition: { $regex: search, $options: 'i' } },
+        { batchNo: { $regex: search, $options: 'i' } }
+      ]
+    }).select('_id');
+
+    query.$or = [
+      { billNumber: { $regex: search, $options: 'i' } },
+      { supplier: { $regex: search, $options: 'i' } },
+      { note: { $regex: search, $options: 'i' } },
+      { medicine: { $in: matchingMedicines.map((medicine) => medicine._id) } }
+    ];
+  }
+
+  const bills = await MedicineStockMovement.find(query)
+    .populate('medicine createdBy', 'marketName genericName composition batchNo unit company supplier name email role')
+    .sort({ stockAddingDate: -1, createdAt: -1 });
+  sendSuccess(res, 'Medicine purchase/add-stock bills fetched.', bills);
+});
+
+const getStockBill = asyncHandler(async (req, res) => {
+  const bill = await MedicineStockMovement.findOne({
+    _id: req.params.id,
+    movementType: { $in: ['Opening', 'Add Stock'] },
+    billNumber: { $exists: true, $ne: '' }
+  }).populate('medicine createdBy', 'marketName genericName composition batchNo unit company supplier name email role');
+
+  if (!bill) { res.status(404); throw new Error('Purchase/add-stock bill not found.'); }
+  sendSuccess(res, 'Medicine purchase/add-stock bill fetched.', bill);
+});
+
 const getCompositionAvailability = asyncHandler(async (req, res) => {
   const { composition } = req.query;
   const query = { status: 'Active' };
@@ -515,5 +632,7 @@ module.exports = {
   getSales,
   getSale,
   cancelSale,
+  getStockBills,
+  getStockBill,
   getCompositionAvailability
 };

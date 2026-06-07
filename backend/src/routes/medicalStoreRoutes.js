@@ -10,6 +10,8 @@ const {
   getSales,
   getSale,
   cancelSale,
+  getStockBills,
+  getStockBill,
   getCompositionAvailability
 } = require('../controllers/medicalStoreController');
 const { protect } = require('../middleware/authMiddleware');
@@ -23,6 +25,8 @@ const writeRoles = [ROLES.ADMIN, ROLES.ACCOUNTS, ROLES.MEDICAL_STORE];
 
 router.get('/dashboard', protect, authorize(...readRoles), getDashboard);
 router.get('/compositions', protect, authorize(...readRoles), getCompositionAvailability);
+router.get('/stock-bills', protect, authorize(...readRoles), getStockBills);
+router.get('/stock-bills/:id', protect, authorize(...readRoles), getStockBill);
 
 router.route('/medicines')
   .get(protect, authorize(...readRoles), getMedicines)
