@@ -1,7 +1,7 @@
 import { Card, Col, List, Row, Skeleton, Typography } from 'antd';
 import React from 'react';
 import { useEffect, useState } from 'react';
-import { FiActivity, FiBriefcase, FiCreditCard, FiFileText, FiHome, FiUsers } from 'react-icons/fi';
+import { FiActivity, FiBriefcase, FiCreditCard, FiFileText, FiHome, FiPackage, FiUsers } from 'react-icons/fi';
 import api from '../../api/axiosInstance.js';
 import PageHeader from '../../components/PageHeader.jsx';
 import StatCard from '../../components/StatCard.jsx';
@@ -16,9 +16,10 @@ export default function Dashboard() {
   const load = async () => { setLoading(true); try { const res = await api.get('/dashboard'); setData(res.data.data); } finally { setLoading(false); } };
   useEffect(() => { load(); }, []);
   const t = data?.totals || {};
+  const medical = data?.medicalStore || {};
   return (
     <>
-      <PageHeader title={`${user?.role || ''} Dashboard`} subtitle="Live operational, billing and IPD summary for your role." />
+      <PageHeader title={`${user?.role || ''} Dashboard`} subtitle="Live operational, billing, IPD and medical stock summary for your role." />
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}><StatCard title="Total Employees" value={t.employees} prefix={<FiUsers />} loading={loading} /></Col>
         <Col xs={24} sm={12} lg={6}><StatCard title="Total Patients" value={t.patients} prefix={<FiActivity />} loading={loading} /></Col>
@@ -28,6 +29,9 @@ export default function Dashboard() {
         <Col xs={24} sm={12} lg={6}><StatCard title="Today Revenue" value={t.todayRevenue} prefix="₹" loading={loading} /></Col>
         <Col xs={24} sm={12} lg={6}><StatCard title="Pending Dues" value={t.pendingDues} prefix="₹" loading={loading} /></Col>
         <Col xs={24} sm={12} lg={6}><StatCard title="Total Doctors" value={t.doctors} prefix={<FiBriefcase />} loading={loading} /></Col>
+        <Col xs={24} sm={12} lg={6}><StatCard title="Medicines" value={t.totalMedicines} prefix={<FiPackage />} loading={loading} /></Col>
+        <Col xs={24} sm={12} lg={6}><StatCard title="Out of Stock" value={t.outOfStockMedicines} prefix={<FiPackage />} loading={loading} /></Col>
+        <Col xs={24} sm={12} lg={6}><StatCard title="Today Medicine Sale" value={t.todayMedicineRevenue} prefix="₹" loading={loading} /></Col>
       </Row>
       <Row gutter={[16, 16]} style={{ marginTop: 18 }}>
         <Col xs={24} lg={12}>
@@ -37,7 +41,17 @@ export default function Dashboard() {
         </Col>
         <Col xs={24} lg={12}>
           <Card className="page-card" title="Recent Invoices">
-            {loading ? <Skeleton /> : <List dataSource={data?.recentInvoices || []} renderItem={(item) => <List.Item><List.Item.Meta title={item.invoiceNumber} description={`${item.patient?.name || '-'} • ${item.status}`} /><CurrencyText value={item.total} /></List.Item>} />}
+            {loading ? <Skeleton /> : <List dataSource={data?.recentInvoices || []} renderItem={(item) => <List.Item><List.Item.Meta title={item.invoiceNumber} description={`${item.patient?.name || item.invoiceType || '-'} • ${item.status}`} /><CurrencyText value={item.total} /></List.Item>} />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card className="page-card" title="Medical Store Alerts">
+            {loading ? <Skeleton /> : <List dataSource={medical.lowStockMedicines || []} renderItem={(item) => <List.Item><List.Item.Meta title={`${item.marketName} - ${item.stockPriority?.label}`} description={`${item.composition} • Stock: ${item.stockQty} ${item.unit || ''}`} /><Typography.Text type={item.stockPriority?.label === 'Immediate' ? 'danger' : 'warning'}>{item.stockPriority?.reason}</Typography.Text></List.Item>} />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card className="page-card" title="Recent Medicine Bills">
+            {loading ? <Skeleton /> : <List dataSource={medical.recentMedicineSales || []} renderItem={(item) => <List.Item><List.Item.Meta title={`${item.billNumber} - ${item.saleType}`} description={`${item.patient?.name || item.outsiderName || 'Outsider'} • ${formatDateTime(item.date)}`} /><CurrencyText value={item.total} /></List.Item>} />}
           </Card>
         </Col>
         <Col xs={24}>

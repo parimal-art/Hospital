@@ -11,7 +11,7 @@ const invoiceItemSchema = new mongoose.Schema({
 
 const invoiceSchema = new mongoose.Schema({
   invoiceNumber: { type: String, required: true, unique: true },
-  invoiceType: { type: String, enum: ['Normal', 'Discharge Final'], default: 'Normal' },
+  invoiceType: { type: String, enum: ['Normal', 'Discharge Final', 'Medicine Sale'], default: 'Normal' },
   patient: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient' },
   admission: { type: mongoose.Schema.Types.ObjectId, ref: 'Admission' },
   ledger: { type: mongoose.Schema.Types.ObjectId, ref: 'Ledger' },

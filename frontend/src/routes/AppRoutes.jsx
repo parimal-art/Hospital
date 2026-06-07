@@ -27,6 +27,7 @@ import ReportsHub from '../pages/reports/ReportsHub.jsx';
 import Notifications from '../pages/notifications/Notifications.jsx';
 import AuditLogs from '../pages/audit/AuditLogs.jsx';
 import Settings from '../pages/settings/Settings.jsx';
+import MedicalStore from '../pages/medical-store/MedicalStore.jsx';
 
 export default function AppRoutes() {
   return (
@@ -51,6 +52,7 @@ export default function AppRoutes() {
           <Route path="/daily-ipd" element={<DailyIpdEntries />} />
           <Route path="/billing" element={<Billing />} />
           <Route path="/billing/:id" element={<InvoiceDetails />} />
+          <Route path="/medical-store" element={<MedicalStore />} />
           <Route path="/doctors" element={<Doctors />} />
           <Route path="/doctors/:id" element={<DoctorDetails />} />
           <Route path="/documents" element={<Documents />} />

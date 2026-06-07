@@ -39,6 +39,7 @@ app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/audit-logs', require('./routes/auditRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
+app.use('/api/medical-store', require('./routes/medicalStoreRoutes'));
 
 app.use(notFound);
 app.use(errorHandler);

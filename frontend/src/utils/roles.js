@@ -4,6 +4,7 @@ export const ROLES = {
   RECEPTION: 'Reception/IPD Desk',
   DOCTOR: 'Doctor',
   NURSE: 'Nurse/Ward Staff',
+  MEDICAL_STORE: 'Medical Store',
   AUDITOR: 'Auditor/Viewer'
 };
 
